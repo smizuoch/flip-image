@@ -414,7 +414,13 @@
     .flip-btn.flipped svg { opacity: 0.85; }
 
     .flip-label { line-height: 1.2; text-align: center; }
-    .flip-label-sub { font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 2px; }
+    .flip-label-sub {
+      display: block;
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--muted);
+      margin-top: 2px;
+    }
 
     /* ── Status note ── */
     .status-note {
@@ -609,7 +615,7 @@
                 <div class="dropzone-plus">+</div>
               </div>
               <p class="dropzone-title">画像をドラッグ＆ドロップ または<span class="link">参照</span></p>
-              <p class="dropzone-help">JPEG, PNG, WEBP, HEIC, GIF, BMP に対応</p>
+              <p class="dropzone-help">JPEG, PNG, WEBP, HEIC, HEIF, GIF, BMP の読み込みに対応</p>
             </div>
           </label>
 
@@ -646,7 +652,7 @@
                 </svg>
                 <span class="flip-label">
                   左右反転
-                  <div class="flip-label-sub">ミラーリング</div>
+                  <span class="flip-label-sub">ミラーリング</span>
                 </span>
               </button>
 
@@ -662,7 +668,7 @@
                 </svg>
                 <span class="flip-label">
                   上下反転
-                  <div class="flip-label-sub">垂直フリップ</div>
+                  <span class="flip-label-sub">垂直フリップ</span>
                 </span>
               </button>
             </div>
@@ -699,7 +705,7 @@
               <li>ドラッグ＆ドロップとファイル選択に対応</li>
               <li>左右反転・上下反転をワンクリックで切り替え</li>
               <li>画像はブラウザ内で処理（サーバー送信なし）</li>
-              <li>JPEG, PNG, WEBP, HEIC, GIF, BMP に対応</li>
+              <li>JPEG, PNG, WEBP, HEIC, HEIF, GIF, BMP の読み込みに対応</li>
             </ul>
           </div>
         </div>
@@ -717,6 +723,7 @@
       originalName: '',
       flipH: false,
       flipV: false,
+      formatNotice: '',
     };
 
     const el = {
@@ -746,8 +753,11 @@
       document.documentElement.dataset.theme = theme;
       const meta = document.querySelector('meta[name="theme-color"]');
       if (meta) meta.content = theme === 'dark' ? '#101725' : '#2563ff';
-      el.themeToggle.setAttribute('aria-label', theme === 'dark' ? 'ライトモードに切り替え' : 'ダークモードに切り替え');
+      const nextLabel = theme === 'dark' ? 'ライトモードに切り替え' : 'ダークモードに切り替え';
+      el.themeToggle.setAttribute('aria-label', nextLabel);
+      el.themeToggle.setAttribute('title', nextLabel);
     }
+    applyTheme(document.documentElement.dataset.theme || readStoredTheme() || 'light');
     el.themeToggle.addEventListener('click', () => {
       const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
       applyTheme(next);
@@ -756,6 +766,16 @@
 
     // ── File loading ───────────────────────────────────────────
     const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'image/gif', 'image/bmp'];
+    const EXTENSION_TO_MIME = {
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      png: 'image/png',
+      webp: 'image/webp',
+      heic: 'image/heic',
+      heif: 'image/heif',
+      gif: 'image/gif',
+      bmp: 'image/bmp',
+    };
 
     function formatBytes(bytes) {
       if (bytes < 1024) return bytes + ' B';
@@ -768,35 +788,80 @@
       el.statusNote.className = 'status-note' + (isError ? ' error' : '');
     }
 
+    function getFileExtension(name) {
+      const match = name.toLowerCase().match(/\.([^.]+)$/);
+      return match ? match[1] : '';
+    }
+
+    function detectInputType(file) {
+      const fileType = (file.type || '').toLowerCase();
+      if (ACCEPTED.includes(fileType)) return fileType;
+      return EXTENSION_TO_MIME[getFileExtension(file.name)] || '';
+    }
+
+    function getFormatNotice(fileType) {
+      if (fileType === 'image/gif') {
+        return 'GIF は静止画として編集され、保存時は PNG になります。';
+      }
+      if (fileType === 'image/heic' || fileType === 'image/heif' || fileType === 'image/bmp') {
+        return 'この形式は保存時に PNG に変換されます。';
+      }
+      return '';
+    }
+
+    function getPreferredExport(fileType) {
+      if (fileType === 'image/png') return { mime: 'image/png' };
+      if (fileType === 'image/webp') return { mime: 'image/webp', quality: 0.92 };
+      if (fileType === 'image/jpeg') return { mime: 'image/jpeg', quality: 0.92 };
+      return { mime: 'image/png' };
+    }
+
+    function getExportExtension(mime) {
+      if (mime === 'image/png') return 'png';
+      if (mime === 'image/webp') return 'webp';
+      return 'jpg';
+    }
+
+    function getExportLabel(mime) {
+      if (mime === 'image/png') return 'PNG';
+      if (mime === 'image/webp') return 'WEBP';
+      return 'JPEG';
+    }
+
     function loadFile(file) {
       if (!file) return;
-      if (!ACCEPTED.includes(file.type) && !file.name.match(/\.(heic|heif)$/i)) {
-        setStatus('対応していないファイル形式です。JPEG, PNG, WEBP, HEIC, GIF, BMP を選択してください。', true);
+      const fileType = detectInputType(file);
+      if (!fileType) {
+        setStatus('対応していないファイル形式です。JPEG, PNG, WEBP, HEIC, HEIF, GIF, BMP を選択してください。', true);
         return;
       }
 
-      if (state.imageURL) URL.revokeObjectURL(state.imageURL);
+      const nextImageURL = URL.createObjectURL(file);
+      const probe = new Image();
+      probe.onload = () => {
+        if (state.imageURL) URL.revokeObjectURL(state.imageURL);
+        state.file = file;
+        state.fileType = fileType;
+        state.originalName = file.name.replace(/\.[^.]+$/, '');
+        state.imageURL = nextImageURL;
+        state.flipH = false;
+        state.flipV = false;
+        state.formatNotice = getFormatNotice(fileType);
 
-      state.file = file;
-      state.fileType = file.type || 'image/png';
-      state.originalName = file.name.replace(/\.[^.]+$/, '');
-      state.imageURL = URL.createObjectURL(file);
-      state.flipH = false;
-      state.flipV = false;
-
-      el.previewImg.src = state.imageURL;
-      el.previewImg.onload = () => {
+        el.previewImg.src = nextImageURL;
         el.dropzone.style.display = 'none';
         el.previewLayout.classList.add('active');
         el.fileInfo.textContent = file.name + ' — ' + formatBytes(file.size);
         el.downloadBtn.disabled = false;
         updateFlipButtons();
         updatePreview();
-        setStatus('');
+        setStatus(state.formatNotice, false);
       };
-      el.previewImg.onerror = () => {
-        setStatus('画像の読み込みに失敗しました。', true);
+      probe.onerror = () => {
+        URL.revokeObjectURL(nextImageURL);
+        setStatus('画像の読み込みに失敗しました。ブラウザで開けない形式の可能性があります。', true);
       };
+      probe.src = nextImageURL;
     }
 
     // ── Drag & drop ────────────────────────────────────────────
@@ -883,21 +948,27 @@
         ctx.drawImage(img, 0, 0);
         ctx.restore();
 
-        const outType = state.fileType === 'image/png' ? 'image/png' : 'image/jpeg';
-        const ext = outType === 'image/png' ? 'png' : 'jpg';
+        const preferredExport = getPreferredExport(state.fileType);
         const suffix = [state.flipH ? 'flipH' : '', state.flipV ? 'flipV' : ''].filter(Boolean).join('_') || 'original';
-        const filename = state.originalName + '_' + suffix + '.' + ext;
 
         canvas.toBlob(blob => {
           if (!blob) { setStatus('書き出しに失敗しました。', true); return; }
+          const actualType = blob.type || preferredExport.mime;
+          const filename = state.originalName + '_' + suffix + '.' + getExportExtension(actualType);
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
           a.download = filename;
           a.click();
           URL.revokeObjectURL(url);
-          setStatus('');
-        }, outType, 0.92);
+          const fallbackNotice = actualType !== preferredExport.mime
+            ? `保存形式は ${getExportLabel(actualType)} になりました。`
+            : state.formatNotice;
+          setStatus(fallbackNotice, false);
+        }, preferredExport.mime, preferredExport.quality);
+      };
+      img.onerror = () => {
+        setStatus('書き出し用の画像を読み込めませんでした。別の画像で再試行してください。', true);
       };
       img.src = state.imageURL;
     });
