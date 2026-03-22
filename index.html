@@ -78,6 +78,8 @@
       --line: #d9d9df;
       --blue: #2563ff;
       --blue-hover: #1d4fe0;
+      --primary-text: #ffffff;
+      --primary-disabled-text: #6b6b73;
       --shadow: 0 18px 60px rgba(0, 0, 0, 0.18);
       --workspace-bg: #efeff2;
       --dropzone-border: #dbdbdf;
@@ -437,7 +439,7 @@
       flex: 1;
       padding: 14px 22px;
       background: var(--blue);
-      color: #fff;
+      color: var(--primary-text);
       border: none;
       border-radius: var(--radius-md);
       font-size: 16px;
@@ -449,7 +451,7 @@
     .primary:active { transform: scale(0.98); }
     .primary:disabled {
       background: var(--input-bg, #efeff1);
-      color: var(--muted);
+      color: var(--primary-disabled-text);
       cursor: not-allowed;
       transform: none;
     }
@@ -515,6 +517,8 @@
       --line: #283449;
       --blue: #7ea6ff;
       --blue-hover: #96b7ff;
+      --primary-text: #081120;
+      --primary-disabled-text: #9facc0;
       --shadow: 0 22px 70px rgba(0, 0, 0, 0.42);
       --workspace-bg: #0d1624;
       --dropzone-border: #30405b;
